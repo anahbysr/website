@@ -1,0 +1,10 @@
+[Unit]
+Description=Check GitHub for Anah deploys every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Unit=anah-autodeploy.service
+
+[Install]
+WantedBy=timers.target
