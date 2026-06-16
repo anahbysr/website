@@ -2,7 +2,7 @@ import { defineConfig } from '@prisma/config';
 
 export default defineConfig({
   migrations: {
-    seed: 'ts-node ./prisma/seed.ts',
+    seed: 'ts-node --esm ./prisma/seed.ts',
   },
   datasource: {
     url: 'file:./anah.db',
