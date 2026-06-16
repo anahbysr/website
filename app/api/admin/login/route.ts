@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createAdminSession } from "@/lib/admin-session";
+import { verifyAdminPassword } from "@/lib/admin-credentials";
 
 export async function POST(req: Request) {
   const { password } = await req.json();
 
-  if (!process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: "Admin password not configured" }, { status: 500 });
-  }
-
-  if (password !== process.env.ADMIN_PASSWORD) {
+  const isValid = await verifyAdminPassword(String(password || ""));
+  if (!isValid) {
     return NextResponse.json({ error: "Invalid password" }, { status: 401 });
   }
 
