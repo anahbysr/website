@@ -28,20 +28,11 @@ export const metadata: Metadata = {
     siteName: "Anah by Sindhura Reddy",
     title: "Anah by Sindhura Reddy | Dressed in Promise",
     description: "Sustainable Indian casuals for little ones, 0-9 years. Soft fabrics. Soulful designs.",
-    images: [
-      {
-        url: "/uploads/ombre-yellow-rust.jpg",
-        width: 1200,
-        height: 1200,
-        alt: "Anah by Sindhura Reddy",
-      },
-    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Anah by Sindhura Reddy | Dressed in Promise",
     description: "Sustainable Indian casuals for little ones, 0-9 years. Soft fabrics. Soulful designs.",
-    images: ["/uploads/ombre-yellow-rust.jpg"],
   },
 };
 
