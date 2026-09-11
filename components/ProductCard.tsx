@@ -48,9 +48,11 @@ export default function ProductCard({ product }: { product: Product }) {
         <Link href={`/shop/${product.slug}`} className="mb-1 line-clamp-2 font-serif text-xl text-deepbrown transition-colors hover:text-coral">
           {product.name}
         </Link>
-        <p className="mb-3 font-sans text-xs uppercase tracking-wider text-bodytext">
-          {product.ageFrom}-{product.ageTo} yrs - {product.fabric}
-        </p>
+        {product.fabric ? (
+          <p className="mb-3 font-sans text-xs uppercase tracking-wider text-bodytext">
+            {product.fabric}
+          </p>
+        ) : null}
         <div className="mt-auto flex items-center gap-2">
           {product.salePrice ? (
             <>

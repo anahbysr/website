@@ -18,11 +18,19 @@ export async function POST(req: Request) {
   }
 
   if (!ALLOWED_TYPES.has(file.type)) {
-    return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: `Unsupported file type${file.type ? ` (${file.type})` : ""}. Please upload a JPG, PNG, WebP or GIF image. iPhone photos saved as HEIC must be converted to JPG first.`,
+      },
+      { status: 400 },
+    );
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return NextResponse.json({ error: "File exceeds 10MB limit" }, { status: 400 });
+    return NextResponse.json(
+      { error: `File is ${(file.size / (1024 * 1024)).toFixed(1)}MB. Please upload an image under 10MB.` },
+      { status: 400 },
+    );
   }
 
   const sanitizedName = file.name.replace(/\s+/g, "-");

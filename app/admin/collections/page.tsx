@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { slugify } from "@/lib/serializers";
 import Link from "next/link";
 
@@ -18,14 +18,17 @@ export default function AdminCollectionsPage() {
   const [collections, setCollections] = useState<CollectionRecord[]>([]);
   const [editing, setEditing] = useState<CollectionRecord | null>(null);
 
-  async function loadCollections() {
+  const loadCollections = useCallback(async () => {
     const response = await fetch("/api/admin/collections");
     setCollections(await response.json());
-  }
+  }, []);
 
   useEffect(() => {
+    // This admin page fetches data on mount; local state is updated after the
+    // request resolves, which is the intended behavior here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadCollections();
-  }, []);
+  }, [loadCollections]);
 
   function startCreate() {
     setEditing({ id: "", name: "", slug: "", description: "", coverImage: "", order: collections.length });
@@ -89,6 +92,8 @@ export default function AdminCollectionsPage() {
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {collections.map((collection, index) => (
           <div key={collection.id} className="rounded-sm border border-taupe/20 bg-white overflow-hidden">
+            {/* Admin-only preview of an arbitrary uploaded path; no need to run it through the image optimizer. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             {collection.coverImage ? <img src={collection.coverImage} alt="" className="h-52 w-full object-cover" /> : <div className="h-52 bg-cream" />}
             <div className="p-4 space-y-3">
               <div>
@@ -117,6 +122,8 @@ export default function AdminCollectionsPage() {
               <input value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value, slug: slugify(event.target.value) })} placeholder="Name" className="rounded-sm border border-taupe/30 px-3 py-2" />
               <input value={editing.slug} onChange={(event) => setEditing({ ...editing, slug: event.target.value })} placeholder="Slug" className="rounded-sm border border-taupe/30 px-3 py-2" />
               <textarea value={editing.description || ""} onChange={(event) => setEditing({ ...editing, description: event.target.value })} placeholder="Description" className="min-h-24 rounded-sm border border-taupe/30 px-3 py-2" />
+              {/* Admin-only preview of an arbitrary uploaded path; no need to run it through the image optimizer. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               {editing.coverImage ? <img src={editing.coverImage} alt="" className="h-48 w-full rounded-sm object-cover" /> : null}
               <input type="file" accept="image/*" onChange={(event) => {
                 const file = event.target.files?.[0];

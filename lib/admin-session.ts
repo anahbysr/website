@@ -57,7 +57,3 @@ export function validateAdminSession(cookieValue: string | undefined | null) {
 
   return true;
 }
-
-export function destroyAdminSession(_cookieValue: string | undefined | null) {
-  return;
-}

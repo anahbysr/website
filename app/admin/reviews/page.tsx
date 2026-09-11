@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Review = {
   id: string;
@@ -16,15 +16,18 @@ export default function AdminReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  async function loadReviews() {
+  const loadReviews = useCallback(async () => {
     const query = statusFilter === "ALL" ? "" : `?status=${statusFilter}`;
     const response = await fetch(`/api/admin/reviews${query}`);
     setReviews(await response.json());
-  }
+  }, [statusFilter]);
 
   useEffect(() => {
+    // This admin page fetches data on filter change; local state is updated
+    // after the request resolves, which is the intended behavior here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadReviews();
-  }, [statusFilter]);
+  }, [loadReviews]);
 
   async function updateReview(id: string, status: string) {
     await fetch(`/api/admin/reviews/${id}`, {

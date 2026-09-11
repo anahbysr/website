@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatCurrency, parseJsonObject, slugify } from "@/lib/serializers";
 import { SUGGESTED_BADGES } from "@/lib/product-utils";
 
@@ -80,7 +80,7 @@ export default function AdminProductsPage() {
   const [form, setForm] = useState<ProductForm>(emptyForm);
   const [open, setOpen] = useState(false);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const params = new URLSearchParams();
     if (statusFilter !== "ALL") params.set("status", statusFilter);
     if (collectionFilter !== "ALL") params.set("collectionId", collectionFilter);
@@ -90,11 +90,14 @@ export default function AdminProductsPage() {
     ]);
     setProducts(await productRes.json());
     setCollections(await collectionRes.json());
-  }
+  }, [statusFilter, collectionFilter]);
 
   useEffect(() => {
+    // This admin page fetches data on filter change; local state is updated
+    // after the request resolves, which is the intended behavior here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData();
-  }, [statusFilter, collectionFilter]);
+  }, [loadData]);
 
   const defaultSizes = useMemo(() => emptyForm.sizes, []);
 
@@ -216,6 +219,8 @@ export default function AdminProductsPage() {
                 <tr key={product.id} className="border-t border-taupe/10">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
+                      {/* Admin-only thumbnail of an arbitrary uploaded path; no need to run it through the image optimizer. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       {image ? <img src={image} alt="" className="h-14 w-12 rounded-sm object-cover" /> : null}
                       <div>
                         <p>{product.name}</p>
@@ -381,6 +386,8 @@ export default function AdminProductsPage() {
                 <div className="flex flex-wrap gap-3">
                   {form.images.map((image, index) => (
                     <div key={image} className="rounded-sm border border-taupe/20 p-2">
+                      {/* Admin-only thumbnail of an arbitrary uploaded path; no need to run it through the image optimizer. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={image} alt="" className="h-24 w-20 rounded-sm object-cover" />
                       <div className="mt-2 flex gap-2 text-xs font-sans">
                         <button onClick={() => removeImage(image)} className="text-red-700 underline">Delete</button>

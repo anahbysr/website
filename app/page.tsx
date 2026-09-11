@@ -69,7 +69,7 @@ export default async function Home() {
           <div className="order-1 mx-auto w-full max-w-[520px] md:order-2">
             <div className="relative aspect-[4/5] overflow-hidden rounded-sm bg-white/40 shadow-sm">
               <Image
-                src="/images/products/ombre-yellow-rust.jpg"
+                src={config.heroImage}
                 alt={home.hero.title}
                 fill
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 44vw, 520px"

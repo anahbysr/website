@@ -63,6 +63,9 @@ export default async function Image() {
                 boxShadow: "0 18px 50px rgba(86, 49, 25, 0.08)",
               }}
             >
+              {/* ImageResponse renders with Satori, which supports only plain
+                  img elements; next/image cannot be used here. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={logoSrc}
                 alt="Anah logo"
@@ -184,6 +187,9 @@ export default async function Image() {
               background: "#d5c3b2",
             }}
           >
+            {/* ImageResponse renders with Satori, which supports only plain
+                img elements; next/image cannot be used here. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={heroSrc}
               alt="Anah dress collection"

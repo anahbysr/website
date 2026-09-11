@@ -22,10 +22,28 @@ const DEFAULT_ANNOUNCEMENT_ITEMS = [
   "Delivery timelines 8-10 days",
 ];
 
-const TICKER_MESSAGES = [...Array(12)].flatMap(() => DEFAULT_ANNOUNCEMENT_ITEMS);
+const TICKER_REPEATS = 12;
+
+// The admin portal stores the announcement as one line, with the individual
+// messages divided by a spaced separator. Split it back into ticker items so
+// edits made in the portal show up on the storefront. Separators are matched
+// only when padded with spaces, so hyphens inside a message ("8-10 days")
+// survive.
+const ANNOUNCEMENT_SEPARATORS = ["-", "–", "—", "|", "·", "•"];
+
+function parseAnnouncementItems(value: string) {
+  const items = ANNOUNCEMENT_SEPARATORS.reduce(
+    (parts, separator) => parts.flatMap((part) => part.split(` ${separator} `)),
+    [value],
+  )
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return items.length > 0 ? items : DEFAULT_ANNOUNCEMENT_ITEMS;
+}
 
 export default function SiteFrame({
-  announcementBar: _announcementBar,
+  announcementBar,
   children,
   collections,
   instagramHandle,
@@ -34,6 +52,8 @@ export default function SiteFrame({
 }: SiteFrameProps) {
   const pathname = usePathname();
   const isAdminRoute = pathname.startsWith("/admin");
+  const announcementItems = parseAnnouncementItems(announcementBar);
+  const tickerMessages = [...Array(TICKER_REPEATS)].flatMap(() => announcementItems);
 
   if (isAdminRoute) {
     return <>{children}</>;
@@ -52,7 +72,7 @@ export default function SiteFrame({
           }}
         >
           <div className="announcement-ticker-track">
-            {TICKER_MESSAGES.map((msg, i) => (
+            {tickerMessages.map((msg, i) => (
               <span
                 key={i}
                 style={{
