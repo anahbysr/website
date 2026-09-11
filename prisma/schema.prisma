@@ -71,6 +71,13 @@ model Order {
   couponCode        String?
   discount          Float    @default(0)
   paymentMethod     String?
+  // Payment state as reported by Razorpay, kept separate from `status`, which
+  // tracks fulfilment. PENDING | PAID | FAILED | REFUNDED | PARTIALLY_REFUNDED.
+  paymentStatus        String   @default("PENDING")
+  // Razorpay payment method: upi, card, netbanking, wallet, emi...
+  paymentMethodDetail  String?
+  paymentFailureReason String?
+  amountRefunded       Float    @default(0)
   confirmationEmailSentAt DateTime?
   reviews           Review[]
 }

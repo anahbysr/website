@@ -1,7 +1,13 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendOrderConfirmationEmail } from "@/lib/order-email";
+import { confirmOrderPayment } from "@/lib/order-payment";
+
+function signaturesMatch(expected: string, received: string) {
+  const a = Buffer.from(expected);
+  const b = Buffer.from(received);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 export async function POST(req: Request) {
   try {
@@ -54,19 +60,7 @@ export async function POST(req: Request) {
     }
 
     if (keyId.includes("mock") || (allowMockFallback && order.razorpayOrderId?.startsWith("mock_rzp_"))) {
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          status: "CONFIRMED",
-          razorpayPaymentId: razorpayPaymentId || `mock_pay_${order.id}`,
-        },
-      });
-
-      try {
-        await sendOrderConfirmationEmail(order.id);
-      } catch (error) {
-        console.error("Mock payment confirmation email failed:", error);
-      }
+      await confirmOrderPayment(order.id, razorpayPaymentId || `mock_pay_${order.id}`);
 
       return NextResponse.json({
         success: true,
@@ -89,23 +83,13 @@ export async function POST(req: Request) {
       .update(`${order.razorpayOrderId}|${razorpayPaymentId}`)
       .digest("hex");
 
-    if (generatedSignature !== razorpaySignature) {
+    if (!signaturesMatch(generatedSignature, razorpaySignature)) {
       return NextResponse.json({ error: "Invalid payment signature" }, { status: 400 });
     }
 
-    await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        status: "CONFIRMED",
-        razorpayPaymentId,
-      },
-    });
-
-    try {
-      await sendOrderConfirmationEmail(order.id);
-    } catch (error) {
-      console.error("Payment confirmation email failed:", error);
-    }
+    // The webhook may already have confirmed this order; that is fine, the
+    // payment is genuine either way and the helper only emails once.
+    await confirmOrderPayment(order.id, razorpayPaymentId);
 
     return NextResponse.json({
       success: true,

@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import Razorpay from "razorpay";
 import { getSettingsMap } from "@/lib/storefront";
 import { getSizeStock } from "@/lib/product-utils";
-import { sendOrderConfirmationEmail } from "@/lib/order-email";
 
 export async function POST(req: Request) {
   try {
@@ -19,7 +18,15 @@ export async function POST(req: Request) {
       pincode,
       paymentMethod,
     } = body as {
-      items: Array<{ productId?: string; name?: string; size: string; qty: number; price: number }>;
+      // `price` is sent by the browser but deliberately ignored; see pricedItems.
+      items: Array<{
+        productId?: string;
+        name?: string;
+        size: string;
+        qty: number;
+        price?: number;
+        customizationValue?: string;
+      }>;
       customerName: string;
       customerEmail?: string;
       customerPhone?: string;
@@ -34,6 +41,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
     }
 
+    // Checkout only offers online payment. Accepting any other method here
+    // would let anyone create a confirmed, unpaid order by editing the request.
+    if (paymentMethod !== "ONLINE") {
+      return NextResponse.json({ error: "Unsupported payment method." }, { status: 400 });
+    }
+
     const productIds: string[] = [
       ...new Set(
         items
@@ -43,13 +56,21 @@ export async function POST(req: Request) {
     ];
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
-      select: { id: true, name: true, status: true, sizes: true },
+      select: { id: true, name: true, status: true, sizes: true, price: true, salePrice: true },
     });
     const productMap = new Map(products.map((product) => [product.id, product]));
 
+    // Quantities requested per product and size, summed across cart lines, so
+    // two lines for the same size cannot together exceed the stock available.
+    const requestedBySize = new Map<string, number>();
+
     for (const item of items) {
-      if (!item.productId) {
+      if (!item.productId || typeof item.size !== "string" || !item.size) {
         return NextResponse.json({ error: "One or more cart items are invalid." }, { status: 400 });
+      }
+
+      if (!Number.isInteger(item.qty) || item.qty < 1) {
+        return NextResponse.json({ error: "One or more cart items have an invalid quantity." }, { status: 400 });
       }
 
       const product = productMap.get(item.productId);
@@ -60,8 +81,11 @@ export async function POST(req: Request) {
         );
       }
 
-      const availableStock = getSizeStock(product, item.size);
-      if (availableStock < item.qty) {
+      const key = `${product.id}::${item.size}`;
+      const requested = (requestedBySize.get(key) ?? 0) + item.qty;
+      requestedBySize.set(key, requested);
+
+      if (getSizeStock(product, item.size) < requested) {
         return NextResponse.json(
           { error: `${product.name} in size ${item.size} is out of stock or has limited quantity left.` },
           { status: 400 },
@@ -69,8 +93,24 @@ export async function POST(req: Request) {
       }
     }
 
+    // Price every line from the database. The browser's price is display-only
+    // and must never decide what the customer is charged.
+    const pricedItems = items.map((item) => {
+      const product = productMap.get(item.productId as string)!;
+      return {
+        productId: product.id,
+        name: product.name,
+        size: item.size,
+        qty: item.qty,
+        price: product.salePrice || product.price,
+        ...(typeof item.customizationValue === "string" && item.customizationValue.trim()
+          ? { customizationValue: item.customizationValue.trim().slice(0, 60) }
+          : {}),
+      };
+    });
+
     let subtotal = 0;
-    for (const item of items) {
+    for (const item of pricedItems) {
       subtotal += item.price * item.qty;
     }
 
@@ -97,24 +137,14 @@ export async function POST(req: Request) {
         city,
         state,
         pincode,
-        items: JSON.stringify(items),
+        items: JSON.stringify(pricedItems),
         subtotal,
         shippingCharge,
         total,
         paymentMethod,
-        status: paymentMethod === "COD" ? "CONFIRMED" : "PENDING",
+        status: "PENDING",
       },
     });
-
-    if (paymentMethod === "COD") {
-      try {
-        await sendOrderConfirmationEmail(order.id);
-      } catch (error) {
-        console.error("COD confirmation email failed:", error);
-      }
-
-      return NextResponse.json({ success: true, orderId: order.id, orderNumber });
-    }
 
     const keyId = process.env.RAZORPAY_KEY_ID || "";
     const keySecret = process.env.RAZORPAY_KEY_SECRET || "";

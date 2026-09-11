@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatCurrency, parseJsonObject, shortOrderId } from "@/lib/serializers";
 
 type Order = {
@@ -17,6 +17,10 @@ type Order = {
   discount?: number | null;
   status: string;
   paymentMethod?: string | null;
+  paymentStatus?: string | null;
+  paymentMethodDetail?: string | null;
+  paymentFailureReason?: string | null;
+  amountRefunded?: number | null;
   razorpayOrderId?: string | null;
   razorpayPaymentId?: string | null;
   trackingNumber?: string | null;
@@ -27,6 +31,60 @@ type Order = {
 
 const statuses = ["ALL", "PENDING", "CONFIRMED", "DISPATCHED", "DELIVERED", "CANCELLED"];
 
+// Payment state comes from Razorpay and is read-only here; `status` above is
+// fulfilment and is what the team edits.
+const PAYMENT_BADGES: Record<string, { label: string; className: string }> = {
+  PENDING: { label: "Awaiting payment", className: "bg-cream text-bodytext" },
+  PAID: { label: "Paid", className: "bg-sage text-deepbrown" },
+  FAILED: { label: "Failed", className: "bg-red-100 text-red-800" },
+  REFUNDED: { label: "Refunded", className: "bg-warm-yellow text-deepbrown" },
+  PARTIALLY_REFUNDED: { label: "Part refunded", className: "bg-warm-yellow text-deepbrown" },
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  upi: "UPI",
+  card: "Card",
+  netbanking: "Net banking",
+  wallet: "Wallet",
+  emi: "EMI",
+  cardless_emi: "Cardless EMI",
+  paylater: "Pay later",
+};
+
+function paymentBadge(order: Pick<Order, "status" | "paymentStatus">) {
+  const paymentStatus = order.paymentStatus || "PENDING";
+
+  // Orders the team has already progressed without any Razorpay payment on
+  // record (older orders settled outside the site) are not "awaiting" anything.
+  if (paymentStatus === "PENDING" && order.status !== "PENDING" && order.status !== "CANCELLED") {
+    return { label: "No online payment", className: "bg-cream text-bodytext" };
+  }
+
+  return PAYMENT_BADGES[paymentStatus] ?? PAYMENT_BADGES.PENDING;
+}
+
+// Money was taken for an order the team has cancelled.
+function needsRefund(order: Pick<Order, "status" | "paymentStatus">) {
+  return order.status === "CANCELLED" && order.paymentStatus === "PAID";
+}
+
+function PaymentBadge({ order }: { order: Pick<Order, "status" | "paymentStatus"> }) {
+  const badge = paymentBadge(order);
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <span className={`rounded-full px-3 py-1 text-xs font-sans uppercase ${badge.className}`}>
+        {badge.label}
+      </span>
+      {needsRefund(order) ? (
+        <span className="rounded-full bg-red-700 px-3 py-1 text-xs font-sans uppercase text-white">
+          Refund needed
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -34,21 +92,21 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  async function loadOrders() {
+  const loadOrders = useCallback(async () => {
     setLoading(true);
     const query = statusFilter === "ALL" ? "" : `?status=${statusFilter}`;
     const response = await fetch(`/api/admin/orders${query}`);
     const data = await response.json();
     setOrders(data);
     setLoading(false);
-  }
+  }, [statusFilter]);
 
   useEffect(() => {
     // This admin page fetches data on filter change; local state is updated
     // after the request resolves, which is the intended behavior here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadOrders();
-  }, [statusFilter]);
+  }, [loadOrders]);
 
   const parsedItems = useMemo(
     () => parseJsonObject<Array<{ name: string; size: string; qty: number; price: number; customizationValue?: string }>>(selectedOrder?.items, []),
@@ -123,20 +181,22 @@ export default function AdminOrdersPage() {
               <th className="px-4 py-3">Customer</th>
               <th className="px-4 py-3">Phone</th>
               <th className="px-4 py-3">Total</th>
-              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Payment</th>
+              <th className="px-4 py-3">Order status</th>
               <th className="px-4 py-3">Date</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td className="px-4 py-6 font-sans" colSpan={7}>Loading orders...</td></tr>
+              <tr><td className="px-4 py-6 font-sans" colSpan={8}>Loading orders...</td></tr>
             ) : orders.map((order) => (
               <tr key={order.id} className="border-t border-taupe/10">
                 <td className="px-4 py-3 font-mono text-sm">{shortOrderId(order.id)}</td>
                 <td className="px-4 py-3">{order.customerName}</td>
                 <td className="px-4 py-3 font-sans text-sm">{order.customerPhone || "-"}</td>
                 <td className="px-4 py-3">{formatCurrency(order.total)}</td>
+                <td className="px-4 py-3"><PaymentBadge order={order} /></td>
                 <td className="px-4 py-3"><span className="rounded-full bg-cream px-3 py-1 text-xs font-sans uppercase">{order.status}</span></td>
                 <td className="px-4 py-3 font-sans text-sm">{new Date(order.createdAt).toLocaleDateString()}</td>
                 <td className="px-4 py-3">
@@ -170,10 +230,35 @@ export default function AdminOrdersPage() {
               <div>
                 <p className="font-sans text-xs uppercase tracking-[0.2em] text-bodytext mb-2">Payment</p>
                 <div className="space-y-2 rounded-sm border border-taupe/20 p-4 text-sm font-sans">
+                  {needsRefund(selectedOrder) ? (
+                    <p className="rounded-sm bg-red-50 px-3 py-2 text-red-800">
+                      This order is cancelled but the customer paid. Refund it from the Razorpay Dashboard.
+                    </p>
+                  ) : null}
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-bodytext">Payment status</span>
+                    <PaymentBadge order={selectedOrder} />
+                  </div>
                   <div className="flex justify-between gap-4">
                     <span className="text-bodytext">Method</span>
-                    <span>{selectedOrder.paymentMethod || "-"}</span>
+                    <span>
+                      {selectedOrder.paymentMethodDetail
+                        ? PAYMENT_METHOD_LABELS[selectedOrder.paymentMethodDetail] ?? selectedOrder.paymentMethodDetail
+                        : selectedOrder.paymentMethod || "-"}
+                    </span>
                   </div>
+                  {selectedOrder.paymentStatus === "FAILED" && selectedOrder.paymentFailureReason ? (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-bodytext">Failure reason</span>
+                      <span className="text-right text-red-800">{selectedOrder.paymentFailureReason}</span>
+                    </div>
+                  ) : null}
+                  {selectedOrder.amountRefunded ? (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-bodytext">Refunded</span>
+                      <span>{formatCurrency(selectedOrder.amountRefunded)}</span>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between gap-4">
                     <span className="text-bodytext">Razorpay Payment ID</span>
                     <span className="break-all text-right">{selectedOrder.razorpayPaymentId || "-"}</span>
@@ -232,7 +317,7 @@ export default function AdminOrdersPage() {
               </div>
 
               <label className="block font-sans text-sm">
-                Status
+                Order status
                 <select
                   value={selectedOrder.status}
                   onChange={(event) => setSelectedOrder({ ...selectedOrder, status: event.target.value })}
