@@ -14,14 +14,8 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://anahbysr.com",
   },
-  icons: {
-    icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/uploads/anah-logo.png", type: "image/png" },
-    ],
-    apple: "/apple-icon.svg",
-    shortcut: "/icon.svg",
-  },
+  // Icons come from the file conventions in app/: favicon.ico, icon.png and
+  // apple-icon.png. Listing them here as well would duplicate the tags.
   openGraph: {
     type: "website",
     url: "https://anahbysr.com",
